@@ -16,28 +16,456 @@
  * Access control rules for ensure-network
  */
 
-rule Default {
-    description: "Allow all participants access to all resources"
-    participant: "ANY"
-    operation: ALL
-    resource: "org.example.ensure.*"
-    action: ALLOW
+// rule Default {
+//    description: "Allow all participants access to all resources"
+//    participant: "ANY"
+//    operation: ALL
+//    resource: "org.example.ensure.*"
+//    action: ALLOW
+//}
+
+
+/////////
+// For Doctor Participant
+////////
+
+rule DoctorCreateBills {
+  description: "doctor can create a bill"
+  participant: "org.example.ensure.Doctor"
+  operation: CREATE
+  resource: "org.example.ensure.Bill"
+  action: ALLOW
 }
-// rule PatientCanSeeUpdateThemselvesOnly {
-//   description: "patient can see and update themselves only"
-//   participant(t): "org.example.ensure.Patient"
-//   operation: ALL 
-//   resource(v): "org.example.ensure.Patient"
-//   condition: (v.getIdentifier() == t.getIdentifier())
+
+rule DoctorCreatePrescriptions {
+  description: "doctor can create prescriptions"
+  participant: "org.example.ensure.Doctor"
+  operation: CREATE
+  resource: "org.example.ensure.Prescription"
+  action: ALLOW
+}
+
+rule DoctorCreateDiagnosis {
+  description: "doctor can create diagnosis"
+  participant: "org.example.ensure.Doctor"
+  operation: CREATE
+  resource: "org.example.ensure.Diagnosis"
+  action: ALLOW
+}
+
+rule DoctorCanSeeTheirOwnHistoryOnly {
+  description: "Doctor should be able to see the history of their own transactions only"
+  participant(t): "org.example.ensure.Doctor"
+  operation: READ
+  resource(v): "org.hyperledger.composer.system.HistorianRecord"
+  condition: (v.participantInvoking.getIdentifier() != t.getIdentifier())
+  action: DENY
+}
+rule DoctorCanReadUpdateOwnRecord {
+  description: "doctor can read or update their own record"
+  participant (t): "org.example.ensure.Doctor"
+  operation: READ, UPDATE
+  resource (v): "org.example.ensure.Doctor"
+  condition: (v.getIdentifier() == t.getIdentifier())
+  action: ALLOW
+}
+rule DoctorCanReadClaimsForHer {
+  description: "doctor can read pending claims involving her"
+  participant (t): "org.example.ensure.Doctor"
+  operation: READ
+  resource (v): "org.example.ensure.Claim"
+  condition: (v.status == 'PENDING')
+  action: ALLOW
+}
+
+rule DoctorCanUpdateClaimsForHer {
+  description: "doctor can update claims involving her"
+  participant (t): "org.example.ensure.Doctor"
+  operation: UPDATE
+  resource (v): "org.example.ensure.Claim"
+  condition: (v.doctor.getIdentifier() == t.getIdentifier())
+  action: ALLOW
+}
+
+
+rule DoctorCanCreateDiagnosis {
+  description: "doctor can create diagnosis"
+  participant: "org.example.ensure.Doctor"
+  operation: ALL
+  resource: "org.example.ensure.CreateDiagnosis"
+  action: ALLOW
+}
+
+rule DoctorCanCreatePrescription {
+  description: "doctor can create prescription"
+  participant: "org.example.ensure.Doctor"
+  operation: ALL
+  resource: "org.example.ensure.CreatePrescription"
+  action: ALLOW
+}
+
+rule DoctorCanReadPrescription {
+  description: "doctor can read nd update prescription given by him"
+  participant(t): "org.example.ensure.Doctor"
+  operation: READ, UPDATE
+  resource(v): "org.example.ensure.Prescription"
+  condition: (v.doctor.getIdentifier() == t.getIdentifier())
+  action: ALLOW
+}
+
+rule DoctorCanReadDiagnosis {
+  description: "doctor can read diagnosis given by him"
+  participant(t): "org.example.ensure.Doctor"
+  operation: READ
+  resource(v): "org.example.ensure.Diagnosis"
+  condition: (v.doctor.getIdentifier() == t.getIdentifier())
+  action: ALLOW
+}
+
+rule DoctorCanReadBills {
+  description: "doctor can read bills given by him"
+  participant(t): "org.example.ensure.Doctor"
+  operation: READ
+  resource(v): "org.example.ensure.Bill"
+  condition: (v.doctor.getIdentifier() == t.getIdentifier())
+  action: ALLOW
+}
+
+rule DoctorCanGenerateBill {
+  description: "doctor can generate bill"
+  participant: "org.example.ensure.Doctor"
+  operation: ALL
+  resource: "org.example.ensure.GenerateBill"
+  action: ALLOW
+}
+
+rule DoctorCanApproveClaim {
+  description: "doctor can approve a claim"
+  participant: "org.example.ensure.Doctor"
+  operation: ALL
+  resource: "org.example.ensure.ApproveClaim"
+  action: ALLOW
+}
+
+rule DoctorCanRejectClaim {
+  description: "doctor can reject a claim for her"
+  participant: "org.example.ensure.Doctor"
+  operation: ALL
+  resource: "org.example.ensure.RejectClaim"
+  action: ALLOW
+}
+
+
+/////////
+// For Insurance Provider Participant
+////////
+rule InsuranceProviderCanRejectClaims {
+  description: "provider can reject claims"
+  participant: "org.example.ensure.InsuranceProvider"
+  operation: ALL
+  resource: "org.example.ensure.RejectClaimFromProvider"
+  action: ALLOW
+}
+rule InsuranceProviderCanSettleClaims {
+  description: "only the provider can settle claims"
+  participant: "org.example.ensure.InsuranceProvider"
+  operation: ALL
+  resource: "org.example.ensure.SettleClaim"
+  action: ALLOW
+}
+
+rule InsuranceProviderCanRejectClaim {
+  description: "the provider can reject claim "
+  participant: "org.example.ensure.InsuranceProvider"
+  operation: ALL
+  resource: "org.example.ensure.RejectClaimFromProvider"
+  action: ALLOW
+}
+
+rule InsuranceProviderCanCreateProduct {
+  description: "insurance provider can create a product"
+  participant: "org.example.ensure.InsuranceProvider"
+  operation: ALL
+  resource: "org.example.ensure.CreateProduct"
+  action: ALLOW
+}
+
+rule InsuranceProviderCanSeeFileClaiming {
+  description: "insurance provider has read access to file claim transaction"
+  participant: "org.example.ensure.InsuranceProvider"
+  operation: READ
+  resource: "org.example.ensure.FileClaim"
+  action: ALLOW
+}
+
+rule InsuranceProviderCanSeeClaimingApproval {
+  description: "insurance provider has read and update access to approve claim transaction"
+  participant: "org.example.ensure.InsuranceProvider"
+  operation: READ, UPDATE
+  resource: "org.example.ensure.ApproveClaim"
+  action: ALLOW
+}
+
+rule InsuranceProviderCanSeeClaimingRejection {
+  description: "insurance provider has full access to reject claim transaction"
+  participant: "org.example.ensure.InsuranceProvider"
+  operation: ALL
+  resource: "org.example.ensure.RejectClaim"
+  action: ALLOW
+}
+
+rule InsuranceProviderHasAllAccessToTheirProducts {
+  description: "insurance provider has all access to their products"
+  participant (t): "org.example.ensure.InsuranceProvider"
+  operation: ALL
+  resource (r): "org.example.ensure.Product"
+  condition: (t.getIdentifier() == r.provider.getIdentifier())
+  action: ALLOW
+}
+
+rule InsuranceProviderCanReadUpdateTheirOwnDetails {
+  description: "insurance provider can read and update their own details only"
+  participant (t): "org.example.ensure.InsuranceProvider"
+  operation: ALL
+  resource (v): "org.example.ensure.InsuranceProvider"
+  condition: (v.getIdentifier() == t.getIdentifier())
+  action: ALLOW
+}
+
+rule InsuranceProviderCanReadUpdatePatientDetails {
+  description: "insurance provider can read and update patient details"
+  participant: "org.example.ensure.InsuranceProvider"
+  operation: READ, UPDATE
+  resource: "org.example.ensure.Patient"
+  action: ALLOW
+}
+
+rule InsuranceProviderCanReadUpdateCreateDoctorDetails {
+  description: "insurance provider can read update and create doctor details"
+  participant: "org.example.ensure.InsuranceProvider"
+  operation: ALL
+  resource: "org.example.ensure.Doctor"
+  action: ALLOW
+}
+
+rule InsuranceProviderCanReadBills {
+  description: "insurance provider can read bills"
+  participant: "org.example.ensure.InsuranceProvider"
+  operation: READ
+  resource: "org.example.ensure.Bill"
+  action: ALLOW
+}
+// rule InsuranceProviderCanReadPrescriptions {
+//   description: "insurance provider can read prescriptions"
+//   participant: "org.example.ensure.InsuranceProvider"
+//   operation: READ
+//   resource: "org.example.ensure.Prescription"
 //   action: ALLOW
 // }
-// rule PatientCanReadAllProducts {
-//   description: "patients can read all products"
-//   participant: "org.example.ensure.Patient"
-//   operation: READ, UPDATE
-//   resource: "org.example.ensure.Product"
+
+// rule InsuranceProviderCanReadDiagnosis {
+//   description: "insurance provider can read diagnosis"
+//   participant: "org.example.ensure.InsuranceProvider"
+//   operation: READ
+//   resource: "org.example.ensure.Diagnosis"
 //   action: ALLOW
-// } 
+// }
+rule InsuranceProviderCanReadClaim {
+  description: "insurance provider can read approved claims"
+  participant: "org.example.ensure.InsuranceProvider"
+  operation: READ
+  resource (v): "org.example.ensure.Claim"
+  condition: (v.status == 'APPROVED')
+  action: ALLOW
+}
+rule InsuranceProviderCanUpdateClaim {
+  description: "insurance provider can update claims"
+  participant: "org.example.ensure.InsuranceProvider"
+  operation: UPDATE
+  resource: "org.example.ensure.Claim"
+  action: ALLOW
+}
+
+/////////
+// For Patient Participant
+////////
+
+rule PatientCanSeeTheirOwnHistoryOnly {
+  description: "Patient should be able to see the history of their own transactions only"
+  participant(t): "org.example.ensure.Patient"
+  operation: READ
+  resource(v): "org.hyperledger.composer.system.HistorianRecord"
+  condition: (v.participantInvoking.getIdentifier() != t.getIdentifier())
+  action: DENY
+}
+
+rule PatientCanGenerateClaim {
+  description: "patient can file a claim"
+  participant: "org.example.ensure.Patient"
+  operation: CREATE
+  resource: "org.example.ensure.Claim"
+  action: ALLOW
+}
+
+rule PatientCanReadHerClaimsOnly {
+	description: "patient can read claims filed by her only"
+  	participant(t): "org.example.ensure.Patient"
+  	operation: READ
+    resource(v): "org.example.ensure.Claim"
+  	condition: (v.patient.getIdentifier() == t.getIdentifier())
+  	action: ALLOW
+}
+
+rule PatientCanReadHerDiagnosisOnly {
+  	description: "patient can read her diagnosis only"
+  	participant(t): "org.example.ensure.Patient"
+  	operation: READ
+    resource(v): "org.example.ensure.Diagnosis"
+  	condition: (v.patient.getIdentifier() == t.getIdentifier())
+  	action: ALLOW
+}
+
+rule PatientCanReadHerPresOnly {
+  	description: "patient can read her prescription only"
+  	participant(t): "org.example.ensure.Patient"
+  	operation: READ
+    resource(v): "org.example.ensure.Prescription"
+  	condition: (v.patient.getIdentifier() == t.getIdentifier())
+  	action: ALLOW
+}
+
+rule PatientCanReadHerBillsOnly {
+  description: "patient can read bills assigned to her only"
+  participant(t): "org.example.ensure.Patient"
+  operation: READ
+  resource(v): "org.example.ensure.Bill"
+  condition: (v.patient.getIdentifier() == t.getIdentifier())
+  action: ALLOW
+}
+
+rule PatientCanReadInsuranceProviderDetails {
+	description: "patient can read insurance provider's details"
+  	participant: "org.example.ensure.Patient"
+  	operation: READ
+    resource: "org.example.ensure.InsuranceProvider"
+  	action: ALLOW
+}
+
+rule PatientCanReadDoctorDetails {
+	description: "patient can read doctor's details"
+  	participant: "org.example.ensure.Patient"
+  	operation: READ
+    resource: "org.example.ensure.Doctor"
+  	action: ALLOW
+}
+
+rule PatientCanSeeUpdateThemselvesOnly {
+   description: "patient can see and update themselves only"
+   participant(t): "org.example.ensure.Patient"
+   operation: ALL 
+   resource(v): "org.example.ensure.Patient"
+   condition: (v.getIdentifier() == t.getIdentifier())
+   action: ALLOW
+ }
+rule PatientCanReadAllProducts {
+   description: "patients can read all products"
+   participant: "org.example.ensure.Patient"
+   operation: READ, UPDATE
+   resource: "org.example.ensure.Product"
+   action: ALLOW
+ } 
+
+rule PatientCanBuyProduct {
+  description: "patient can buy a product"
+  participant: "org.example.ensure.Patient"
+  operation: ALL
+  resource: "org.example.ensure.BuyProduct"
+  action: ALLOW
+}
+
+rule PatientCanFileClaim {
+  description: "patient can file a claim"
+  participant: "org.example.ensure.Patient"
+  operation: ALL
+  resource: "org.example.ensure.FileClaim"
+  action: ALLOW
+}
+
+/////////
+// For Medical Shop Participant
+////////
+rule MedicalShopCanSeeTheirOwnHistoryOnly {
+  description: "med shop should be able to see the history of their own transactions only"
+  participant(t): "org.example.ensure.MedicalShop"
+  operation: READ
+  resource(v): "org.hyperledger.composer.system.HistorianRecord"
+  condition: (v.participantInvoking.getIdentifier() != t.getIdentifier())
+  action: DENY
+}
+rule MedicalShopCanReadUpdateThemselve {
+  description: "medical shop user can read and update themselves" 
+  participant(p): "org.example.ensure.MedicalShop"
+  operation: READ, UPDATE
+  resource(r): "org.example.ensure.MedicalShop"
+  condition: (p.getIdentifier() == r.getIdentifier())
+  action: ALLOW
+}
+rule MedShopCanReadUpdateMedReq {
+  description: "med shop can read med req"
+  participant: "org.example.ensure.MedicalShop"
+  operation: READ
+  resource: "org.example.ensure.MedReq"
+  action: ALLOW
+}
+
+rule PatientCanCreateMedReq {
+  description: "patient can create med req"
+  participant: "org.example.ensure.Patient"
+  operation: ALL
+  resource: "org.example.ensure.MedReq"
+  action: ALLOW
+}
+
+rule PatientCanGetMeds {
+  description: "patient can get meds"
+  participant: "org.example.ensure.Patient"
+  operation: ALL
+  resource: "org.example.ensure.GetMeds"
+  action: ALLOW
+}
+
+
+rule MedicalShopCanUpdatePrescription {
+  description: "med shop can update the pstatus in prescription"
+  participant: "org.example.ensure.MedicalShop"
+  operation: READ, UPDATE
+  resource: "org.example.ensure.Prescription"
+  action: ALLOW
+}
+
+rule medshopcanreadclaim {
+  description: "med shop can read claim"
+  participant: "org.example.ensure.MedicalShop"
+  operation: READ
+  resource: "org.example.ensure.Claim"
+  action: ALLOW
+}
+
+rule medshopcancompleterequests {
+  description: "med shop can complete requests"
+  participant: "org.example.ensure.MedicalShop"
+  operation: ALL
+  resource: "org.example.ensure.CompleteMedReq"
+  action: ALLOW
+}
+
+rule patientcanseemedshops {
+  description: "patient can see med shops" 
+  participant: "org.example.ensure.Patient"
+  operation: READ
+  resource: "org.example.ensure.MedicalShop"
+  action: ALLOW
+}
 
 rule NetworkAdminUser {
     description: "Grant business network administrators full access to user resources"

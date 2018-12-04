@@ -16,7 +16,7 @@ namespace org.example.ensure
 
 enum ClaimStatus {
   o PENDING // when the patient files a claim
-  o REJECTED // by the doctor
+  o REJECTED // by the doctor or provider
   o SETTLED // by the provider
   o APPROVED // by the doctor
 }
@@ -24,6 +24,13 @@ enum ClaimStatus {
 enum ClaimType {
   o CASHLESS 
   o REIMBURSEMENT
+}
+
+enum PrescriptionClaimStatus {
+  o REJECTED // by the provider or doctor
+  o CLAIMED // by the provider
+  o PENDING // default
+  o APPROVED // by the doctor
 }
 
 /**
@@ -48,6 +55,7 @@ asset Prescription identified by prescriptionId {
   o Integer validityDays default = 183 optional //default validity=6 months
   --> Patient patient
   --> Doctor doctor
+  o PrescriptionClaimStatus pstatus
 }
 
 /**
@@ -85,6 +93,13 @@ asset Claim identified by ClaimId {
   o ClaimType type
 }
 
+asset MedReq identified by reqId {
+  o String reqId 
+  --> Prescription prescription
+  --> Claim claim
+  --> Patient patient
+}
+
 /**
  * A Doctor participant
  */
@@ -116,13 +131,24 @@ asset Claim identified by ClaimId {
    o Product[] products optional
  }
 
-// /** 
-//  * A Medical Shop participant
-//  */
-//  participant MedicalShop identified by email {
-//    o String email
-//    o String name
-//  }
+/** 
+ * A Medical Shop participant
+ */
+ participant MedicalShop identified by email {
+   o String email
+   o String name
+ }
+
+transaction GetMeds {
+  --> Prescription prescription
+  --> Claim claim
+  --> Patient patient
+  o String reqId
+}
+
+transaction CompleteMedReq {
+  --> MedReq request
+}
 
 transaction CreateProduct {
   o String productId
@@ -178,6 +204,14 @@ transaction RejectClaim {
   --> Claim claim
 }
 
+transaction SettleClaim {
+  --> Claim claim
+} 
+
+transaction RejectClaimFromProvider {
+  --> Claim claim
+}
+
 //events
 
 /**
@@ -203,8 +237,14 @@ event ClaimApproved {
   --> Patient patient
 }
 
-//emitted when a claim is rejected by the doctor, subscribed to by the patient and the insurance provider
+//emitted when a claim is rejected by the doctor or the provider, subscribed to by the patient and the insurance provider
 event ClaimRejected {
+  --> Claim claim
+  --> Patient patient
+}
+
+//emitted when a claim is settled by the provider, subscribed to by the patient 
+event ClaimSettled {
   --> Claim claim
   --> Patient patient
 }
