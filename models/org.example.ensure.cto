@@ -1,0 +1,210 @@
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+namespace org.example.ensure
+
+enum ClaimStatus {
+  o PENDING // when the patient files a claim
+  o REJECTED // by the doctor
+  o SETTLED // by the provider
+  o APPROVED // by the doctor
+}
+
+enum ClaimType {
+  o CASHLESS 
+  o REIMBURSEMENT
+}
+
+/**
+ * Product asset
+ */
+asset Product identified by productId {
+  o String productId
+  o Double premium
+  o Double cover
+  --> Patient[] buyers optional
+  --> InsuranceProvider provider
+}
+
+//prescription and diagnosis are defined as two separate assets to give the patient more granular control over permissions to read his/her health data
+
+/**
+ * Prescription asset
+ */
+asset Prescription identified by prescriptionId {
+  o String prescriptionId
+  o String description //ipfs hash could go here
+  o Integer validityDays default = 183 optional //default validity=6 months
+  --> Patient patient
+  --> Doctor doctor
+}
+
+/**
+ * Diagnosis asset
+ */
+asset Diagnosis identified by diagnosisId {
+  o String diagnosisId
+  o String description // ipfs hash
+  --> Patient patient
+  --> Doctor doctor
+}
+
+/**
+ * Bill asset
+ */
+asset Bill identified by billId {
+  o String billId
+  o String description // ipfs hash
+  --> Patient patient
+  --> Doctor doctor
+  o Double amount
+}
+
+/**
+ * Claim asset
+ */
+asset Claim identified by ClaimId {
+  o String ClaimId
+  --> Prescription prescription optional
+  --> Bill bill optional
+  --> Patient patient 
+  --> Product product 
+  --> Doctor doctor
+  o ClaimStatus status
+  o ClaimType type
+}
+
+/**
+ * A Doctor participant
+ */
+
+ //doctor is not supposed to have all the diagnosis and prescriptions he's given unless the patient permits him to 
+ participant Doctor identified by email {
+  o String email
+  o String firstName
+  o String lastName
+ }
+
+/** 
+ *A Patient participant
+ */
+ participant Patient identified by email {
+   o String email
+   o String firstName
+   o String lastName
+   o Double balance
+   o Product[] products optional
+ }
+
+/**
+ * An InsuranceProvider participant 
+ */
+ participant InsuranceProvider identified by email {
+   o String email
+   o String name
+   o Product[] products optional
+ }
+
+// /** 
+//  * A Medical Shop participant
+//  */
+//  participant MedicalShop identified by email {
+//    o String email
+//    o String name
+//  }
+
+transaction CreateProduct {
+  o String productId
+  o Double premium
+  o Double cover
+  --> InsuranceProvider provider
+}
+
+transaction BuyProduct {
+  --> Product product
+  --> Patient patient
+}
+
+transaction CreateDiagnosis {
+  --> Doctor doctor
+  --> Patient patient
+  o String description
+  o String diagnosisId
+}
+
+transaction CreatePrescription {
+  --> Doctor doctor
+  --> Patient patient
+  o String description
+  o String prescriptionId
+  o Integer validityDays optional
+}
+
+transaction GenerateBill {
+  o String billId
+  o String description
+  --> Patient patient
+  --> Doctor doctor
+  o Double amount
+}
+
+transaction FileClaim {
+  o String claimId
+  --> Prescription prescription optional
+  --> Bill bill optional
+  --> Patient patient 
+  --> Product product 
+  --> Doctor doctor
+  // o ClaimStatus status
+  o ClaimType type
+}
+
+transaction ApproveClaim {
+  --> Claim claim
+}
+
+transaction RejectClaim {
+  --> Claim claim
+}
+
+//events
+
+/**
+ * a buy product event 
+ */
+event BasicEvent {
+  o String detail
+}
+
+/**
+ * a file claim event
+ */
+
+// this event is emitted when a claim is filed by the patient and subscribed to by the doctor and the insurance provider
+event FileClaimEvent {
+  --> Claim claim
+  --> Patient patient
+  --> Doctor doctor
+}
+// emitted when a claim is approved by the doctor, subscribed to by the patient and the insurance provider
+event ClaimApproved {
+  --> Claim claim
+  --> Patient patient
+}
+
+//emitted when a claim is rejected by the doctor, subscribed to by the patient and the insurance provider
+event ClaimRejected {
+  --> Claim claim
+  --> Patient patient
+}
