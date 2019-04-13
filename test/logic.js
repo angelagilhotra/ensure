@@ -13,448 +13,348 @@
  */
 
 'use strict';
+
+var NS = 'org.example.ensure';
+
 /**
- * Write the unit tests for your transction processor functions here
+ * Create Product transaction
+ * @param {org.example.ensure.CreateProduct} createProduct
+ * @transaction
  */
 
-const AdminConnection = require('composer-admin').AdminConnection;
-const BusinessNetworkConnection = require('composer-client').BusinessNetworkConnection;
-const { BusinessNetworkDefinition, CertificateUtil, IdCard } = require('composer-common');
-const path = require('path');
+function createProduct(newproduct) {
+    //defining a new product
+    var product = getFactory().newResource(NS, 'Product', newproduct.productId);
 
-const chai = require('chai');
-chai.should();
-chai.use(require('chai-as-promised'));
+    product.premium = newproduct.premium;
+    product.cover = newproduct.cover;
+    product.provider = newproduct.provider;
 
-const namespace = 'org.example.ensure';
-const assetType = 'SampleAsset';
-const assetNS = namespace + '.' + assetType;
-const participantType = 'SampleParticipant';
-const participantNS = namespace + '.' + participantType;
-
-describe('#' + namespace, () => {
-    // In-memory card store for testing so cards are not persisted to the file system
-    const cardStore = require('composer-common').NetworkCardStoreManager.getCardStore( { type: 'composer-wallet-inmemory' } );
-
-    // Embedded connection used for local testing
-    const connectionProfile = {
-        name: 'embedded',
-        'x-type': 'embedded'
-    };
-
-    // Name of the business network card containing the administrative identity for the business network
-    const adminCardName = 'admin';
-
-    // Admin connection to the blockchain, used to deploy the business network
-    let adminConnection;
-
-    // This is the business network connection the tests will use.
-    let businessNetworkConnection;
-
-    // This is the factory for creating instances of types.
-    let factory;
-
-    // These are the identities for Alice and Bob.
-    const aliceCardName = 'alice';
-    const bobCardName = 'bob';
-
-    // These are a list of receieved events.
-    let events;
-
-    let businessNetworkName;
-
-    before(async () => {
-        // Generate certificates for use with the embedded connection
-        const credentials = CertificateUtil.generate({ commonName: 'admin' });
-
-        // Identity used with the admin connection to deploy business networks
-        const deployerMetadata = {
-            version: 1,
-            userName: 'PeerAdmin',
-            roles: [ 'PeerAdmin', 'ChannelAdmin' ]
-        };
-        const deployerCard = new IdCard(deployerMetadata, connectionProfile);
-        deployerCard.setCredentials(credentials);
-        const deployerCardName = 'PeerAdmin';
-
-        adminConnection = new AdminConnection({ cardStore: cardStore });
-
-        await adminConnection.importCard(deployerCardName, deployerCard);
-        await adminConnection.connect(deployerCardName);
+    if(!product.provider.products) {
+        product.provider.products = [];
+      }
+    product.provider.products.push(product);
+    
+    return getAssetRegistry(NS + '.Product').then(function(registry){
+        return registry.add(product);
+    }).then(function() {
+        return getParticipantRegistry(NS + '.InsuranceProvider');
+    }).then(function(insuranceProviderRegistry){
+        return insuranceProviderRegistry.update(newproduct.provider);
     });
+}
 
-    /**
-     *
-     * @param {String} cardName The card name to use for this identity
-     * @param {Object} identity The identity details
-     */
-    async function importCardForIdentity(cardName, identity) {
-        const metadata = {
-            userName: identity.userID,
-            version: 1,
-            enrollmentSecret: identity.userSecret,
-            businessNetwork: businessNetworkName
-        };
-        const card = new IdCard(metadata, connectionProfile);
-        await adminConnection.importCard(cardName, card);
+
+/**
+ * Buy Product transaction
+ * @param {org.example.ensure.BuyProduct} buyProduct
+ * @transaction
+ */
+
+function buyProduct(buyProduct) {
+    var newOwner = buyProduct.patient;
+    var product = buyProduct.product;
+    if (newOwner.balance < product.premium) { 
+        throw new Error('Insufficient funds for transaction.');
+    }
+    
+    newOwner.balance -= product.premium;
+    if (!newOwner.products) {
+        newOwner.products = [];
+    }
+    newOwner.products.push(product);
+
+    if (!product.buyers) {
+        product.buyers = [];
+    }
+    product.buyers.push(newOwner);
+
+    //event 
+    var factory = getFactory();
+    var basicEvent = factory.newEvent(NS, 'BasicEvent');
+    basicEvent.detail = "hello theree";
+    emit (basicEvent);
+
+    return getParticipantRegistry (NS + '.Patient').then(function(patientRegistry) {
+        return patientRegistry.update(newOwner);
+    }).then(function() {
+        return getAssetRegistry (NS + '.Product').then (function(productRegistry) {
+            return productRegistry.update(product);
+        })
+    });
+}
+
+/**
+ * Create Diagnosis transaction
+ * @param {org.example.ensure.CreateDiagnosis} createDiagnosis
+ * @transaction
+ */
+
+function createDiagnosis(createDiagnosis) {
+    var doctor = createDiagnosis.doctor;
+    var patient = createDiagnosis.patient;
+    var diagnosisId = createDiagnosis.diagnosisId;
+    //defining a new diagnosis
+    var diagnosis = getFactory().newResource(NS, 'Diagnosis', diagnosisId);
+
+    diagnosis.doctor = doctor;
+    diagnosis.patient = patient;
+    diagnosis.description = createDiagnosis.description; //could be a ipfs hash
+
+    return getAssetRegistry(NS + '.Diagnosis').then (function(registry){
+        registry.add(diagnosis);
+    });
+}
+
+/**
+ * Create Prescription transaction
+ * @param {org.example.ensure.CreatePrescription} createPrescription
+ * @transaction
+ */
+function createPrescription(createPrescription) {
+    var doctor = createPrescription.doctor;
+    var patient = createPrescription.patient;
+    var prescriptionId = createPrescription.prescriptionId;
+    //defining a new prescription
+    var prescription = getFactory().newResource(NS, 'Prescription', prescriptionId);
+    prescription.doctor = doctor;
+    prescription.patient = patient;
+    prescription.validityDays = createPrescription.validityDays; //optional
+    prescription.description = createPrescription.description; //could be a ipfs hash
+    prescription.pstatus = 'PENDING';
+    var days_in_ms = 1000 * 60 * 60 * 24 * createPrescription.validityDays;
+    prescription.validUntil = new Date (createPrescription.validityDays + days_in_ms);
+    return getAssetRegistry(NS + '.Prescription').then (function(registry){
+        registry.add(prescription);
+    });
+}
+
+/**
+ * Generate Bill transaction
+ * @param {org.example.ensure.GenerateBill} generateBill
+ * @transaction
+ */
+function generateBill(generateBill) {
+    var billId = generateBill.billId;
+    var description = generateBill.description;
+    var patient = generateBill.patient;
+    var doctor = generateBill.doctor;
+    var amount = generateBill.amount;
+    //defining a new bill
+    var bill = getFactory().newResource(NS, 'Bill', billId);
+    bill.billId = billId;
+    bill.description = description;
+    bill.patient = patient;
+    bill.doctor = doctor;
+    bill.amount = amount;
+    return getAssetRegistry(NS + '.Bill').then (function(registry){
+        registry.add(bill);
+    });
+}
+
+/**
+ * File a Claim transaction
+ * @param {org.example.ensure.FileClaim} fileClaim
+ * @transaction
+ */
+function fileClaim(fileClaim) {
+    //creates a new Claim asset with status = PENDING
+    var claimId = fileClaim.claimId;
+    var type = fileClaim.type;
+    if (type == 'REIMBURSEMENT') {
+        if (!fileClaim.prescription) {
+            throw new Error ('prescription asset required for reimbursement claims');
+        }
+        var prescription = fileClaim.prescription;
+        if (!fileClaim.bill) {
+            throw new Error ('bill asset required for reimbursement claims');
+        }
+        var bill = fileClaim.bill;
+    }
+    var patient = fileClaim.patient;
+    var product = fileClaim.product;
+    var doctor = fileClaim.doctor;
+    var status = 'PENDING';
+
+    var claim = getFactory().newResource(NS, 'Claim', claimId);
+    
+    if(type == 'REIMBURSEMENT') {
+        claim.prescription = prescription;
+        claim.bill = bill;
+    }
+    claim.patient = patient;
+    claim.product = product;
+    claim.status = status;
+    claim.patient = patient;
+    claim.doctor = doctor;
+    claim.type = type;
+    
+    return getAssetRegistry(NS + '.Claim').then (function(registry){
+        registry.add(claim);
+    }).then (function() {
+        //generate event 
+        var event = getFactory().newEvent(NS, 'FileClaimEvent');
+        //set properties
+        event.claim = claim;
+        event.patient = patient;
+        event.doctor = doctor;
+        emit (event);
+    });
+}
+
+/**
+ * Approve a Claim transaction
+ * @param {org.example.ensure.ApproveClaim} approveClaim
+ * @transaction
+ */
+function approveClaim(approveClaim) {
+    var claim = approveClaim.claim;
+    if (claim.status == 'REJECTED') {
+        throw new Error ('Claim has been previously rejected.');
+    }
+    claim.status = 'APPROVED';
+    if (claim.type == 'REIMBURSEMENT') {
+        claim.prescription.pstatus = 'APPROVED';
+    }
+    //update the claim and prescription asset
+    return getAssetRegistry(NS + '.Claim').then(function(registry){
+        registry.update(claim);
+    }).then(function() {
+        getAssetRegistry(NS + '.Prescription').then(function(registry) {
+            registry.update(claim.prescription);
+        });
+    }).then (function() {
+        //generate event
+        var event = getFactory().newEvent(NS, 'ClaimApproved');
+        event.claim = claim;
+        event.patient = claim.patient;
+        emit (event);
+    });
+}
+
+/**
+ * Reject a Claim transaction
+ * @param {org.example.ensure.RejectClaim} rejectClaim
+ * @transaction
+ */
+function rejectClaim(rejectClaim) {
+    var claim = rejectClaim.claim;
+    if (claim.status == 'REJECTED') {
+        throw new Error ('Claim has been previously rejected.');
+    }
+    claim.status = 'REJECTED';
+    
+    if (claim.type == 'REIMBURSEMENT') {
+        claim.prescription.pstatus = 'REJECTED';
+    }
+    //update the claim and prescription asset
+    return getAssetRegistry(NS + '.Claim').then(function(registry){
+        registry.update(claim);
+    }).then(function(){
+        getAssetRegistry(NS + '.Prescription').then(function(registry) {
+            registry.update(claim.prescription);
+        });
+    }).then (function () {
+        //generate event
+        var event = getFactory().newEvent (NS, 'ClaimRejected');
+        event.claim = claim;
+        event.patient = claim.patient;
+        emit (event);
+    });
+}
+
+/**
+ * Settle a Claim transaction
+ * @param {org.example.ensure.SettleClaim} settleClaim
+ * @transaction
+ */
+function settleClaim(settleClaim) {
+    var claim = settleClaim.claim;
+    
+    if (claim.status == 'REJECTED') {
+        throw new Error ('Claim has been previously rejected.');
     }
 
-    // This is called before each test is executed.
-    beforeEach(async () => {
-        // Generate a business network definition from the project directory.
-        let businessNetworkDefinition = await BusinessNetworkDefinition.fromDirectory(path.resolve(__dirname, '..'));
-        businessNetworkName = businessNetworkDefinition.getName();
-        await adminConnection.install(businessNetworkDefinition);
-        const startOptions = {
-            networkAdmins: [
-                {
-                    userName: 'admin',
-                    enrollmentSecret: 'adminpw'
-                }
-            ]
-        };
-        const adminCards = await adminConnection.start(businessNetworkName, businessNetworkDefinition.getVersion(), startOptions);
-        await adminConnection.importCard(adminCardName, adminCards.get('admin'));
-
-        // Create and establish a business network connection
-        businessNetworkConnection = new BusinessNetworkConnection({ cardStore: cardStore });
-        events = [];
-        businessNetworkConnection.on('event', event => {
-            events.push(event);
+    claim.status = 'SETTLED';
+    claim.patient.balance += claim.product.cover;
+    return getAssetRegistry(NS + '.Claim').then(function(registry) {
+        registry.update(claim);
+    }).then(function(){
+        getParticipantRegistry(NS + '.Patient').then(function(registry){
+            registry.update(claim.patient);
         });
-        await businessNetworkConnection.connect(adminCardName);
-
-        // Get the factory for the business network.
-        factory = businessNetworkConnection.getBusinessNetwork().getFactory();
-
-        const participantRegistry = await businessNetworkConnection.getParticipantRegistry(participantNS);
-        // Create the participants.
-        const alice = factory.newResource(namespace, participantType, 'alice@email.com');
-        alice.firstName = 'Alice';
-        alice.lastName = 'A';
-
-        const bob = factory.newResource(namespace, participantType, 'bob@email.com');
-        bob.firstName = 'Bob';
-        bob.lastName = 'B';
-
-        participantRegistry.addAll([alice, bob]);
-
-        const assetRegistry = await businessNetworkConnection.getAssetRegistry(assetNS);
-        // Create the assets.
-        const asset1 = factory.newResource(namespace, assetType, '1');
-        asset1.owner = factory.newRelationship(namespace, participantType, 'alice@email.com');
-        asset1.value = '10';
-
-        const asset2 = factory.newResource(namespace, assetType, '2');
-        asset2.owner = factory.newRelationship(namespace, participantType, 'bob@email.com');
-        asset2.value = '20';
-
-        assetRegistry.addAll([asset1, asset2]);
-
-        // Issue the identities.
-        let identity = await businessNetworkConnection.issueIdentity(participantNS + '#alice@email.com', 'alice1');
-        await importCardForIdentity(aliceCardName, identity);
-        identity = await businessNetworkConnection.issueIdentity(participantNS + '#bob@email.com', 'bob1');
-        await importCardForIdentity(bobCardName, identity);
+    }).then(function() {
+        var event = getFactory().newEvent(NS, 'ClaimSettled');
+        event.claim = claim;
+        event.patient = claim.patient;
+        emit (event);
     });
+} 
 
-    /**
-     * Reconnect using a different identity.
-     * @param {String} cardName The name of the card for the identity to use
-     */
-    async function useIdentity(cardName) {
-        await businessNetworkConnection.disconnect();
-        businessNetworkConnection = new BusinessNetworkConnection({ cardStore: cardStore });
-        events = [];
-        businessNetworkConnection.on('event', (event) => {
-            events.push(event);
-        });
-        await businessNetworkConnection.connect(cardName);
-        factory = businessNetworkConnection.getBusinessNetwork().getFactory();
+/**
+ * Reject a Claim transaction
+ * @param {org.example.ensure.RejectClaimFromProvider} rejectClaimP
+ * @transaction
+ */
+
+function rejectClaimFromProvider (rejectClaimP) {
+    var claim = rejectClaimP.claim;
+    if (claim.status == 'REJECTED') {
+        throw new Error ('Claim has been previously rejected.');
+    }
+    claim.status = 'REJECTED';
+    return getAssetRegistry(NS + '.Claim').then(function(registry) {
+        registry.update(claim);
+    }).then(function() {
+        var event = getFactory().newEvent(NS, 'ClaimRejected');
+        event.claim = claim;
+        event.patient = claim.patient;
+        emit (event);
+    });
+} 
+
+/**
+ * Get meds transaction
+ * @param {org.example.ensure.GetMeds} getMeds
+ * @transaction
+ */
+
+function getMeds (getMeds) {
+    var prescription = getMeds.prescription;
+    var claim = getMeds.claim;
+    var patient = getMeds.patient;
+    var id = getMeds.reqId;
+
+    var MedReq = getFactory().newResource(NS, 'MedReq', id);
+
+    MedReq.prescription = prescription;
+    MedReq.claim = claim;
+    MedReq.patient = patient;
+
+    return getAssetRegistry(NS + '.MedReq').then (function(registry){
+        registry.add(MedReq);
+    });
+}
+
+/**
+ * complete med req transaction
+ * @param {org.example.ensure.CompleteMedReq} completeMedReq
+ * @transaction
+ */
+
+function completeMedReq (medReq) {
+    var request = medReq.request;
+    if (request.prescription.pstatus != 'APPROVED' || request.claim.status != 'SETTLED') {
+        throw new Error ('transaction cannot take place');
     }
 
-    it('Alice can read all of the assets', async () => {
-        // Use the identity for Alice.
-        await useIdentity(aliceCardName);
-        const assetRegistry = await businessNetworkConnection.getAssetRegistry(assetNS);
-        const assets = await assetRegistry.getAll();
+    if (request.prescription.validUntil > request.timestamp) {
+        throw new Error ('prescription expired');
+    }
+    
+    request.prescription.pstatus = 'CLAIMED';
 
-        // Validate the assets.
-        assets.should.have.lengthOf(2);
-        const asset1 = assets[0];
-        asset1.owner.getFullyQualifiedIdentifier().should.equal(participantNS + '#alice@email.com');
-        asset1.value.should.equal('10');
-        const asset2 = assets[1];
-        asset2.owner.getFullyQualifiedIdentifier().should.equal(participantNS + '#bob@email.com');
-        asset2.value.should.equal('20');
-    });
-
-    it('Bob can read all of the assets', async () => {
-        // Use the identity for Bob.
-        await useIdentity(bobCardName);
-        const assetRegistry = await businessNetworkConnection.getAssetRegistry(assetNS);
-        const assets = await assetRegistry.getAll();
-
-        // Validate the assets.
-        assets.should.have.lengthOf(2);
-        const asset1 = assets[0];
-        asset1.owner.getFullyQualifiedIdentifier().should.equal(participantNS + '#alice@email.com');
-        asset1.value.should.equal('10');
-        const asset2 = assets[1];
-        asset2.owner.getFullyQualifiedIdentifier().should.equal(participantNS + '#bob@email.com');
-        asset2.value.should.equal('20');
-    });
-
-    it('Alice can add assets that she owns', async () => {
-        // Use the identity for Alice.
-        await useIdentity(aliceCardName);
-
-        // Create the asset.
-        let asset3 = factory.newResource(namespace, assetType, '3');
-        asset3.owner = factory.newRelationship(namespace, participantType, 'alice@email.com');
-        asset3.value = '30';
-
-        // Add the asset, then get the asset.
-        const assetRegistry = await businessNetworkConnection.getAssetRegistry(assetNS);
-        await assetRegistry.add(asset3);
-
-        // Validate the asset.
-        asset3 = await assetRegistry.get('3');
-        asset3.owner.getFullyQualifiedIdentifier().should.equal(participantNS + '#alice@email.com');
-        asset3.value.should.equal('30');
-    });
-
-    it('Alice cannot add assets that Bob owns', async () => {
-        // Use the identity for Alice.
-        await useIdentity(aliceCardName);
-
-        // Create the asset.
-        const asset3 = factory.newResource(namespace, assetType, '3');
-        asset3.owner = factory.newRelationship(namespace, participantType, 'bob@email.com');
-        asset3.value = '30';
-
-        // Try to add the asset, should fail.
-        const assetRegistry = await  businessNetworkConnection.getAssetRegistry(assetNS);
-        assetRegistry.add(asset3).should.be.rejectedWith(/does not have .* access to resource/);
-    });
-
-    it('Bob can add assets that he owns', async () => {
-        // Use the identity for Bob.
-        await useIdentity(bobCardName);
-
-        // Create the asset.
-        let asset4 = factory.newResource(namespace, assetType, '4');
-        asset4.owner = factory.newRelationship(namespace, participantType, 'bob@email.com');
-        asset4.value = '40';
-
-        // Add the asset, then get the asset.
-        const assetRegistry = await businessNetworkConnection.getAssetRegistry(assetNS);
-        await assetRegistry.add(asset4);
-
-        // Validate the asset.
-        asset4 = await assetRegistry.get('4');
-        asset4.owner.getFullyQualifiedIdentifier().should.equal(participantNS + '#bob@email.com');
-        asset4.value.should.equal('40');
-    });
-
-    it('Bob cannot add assets that Alice owns', async () => {
-        // Use the identity for Bob.
-        await useIdentity(bobCardName);
-
-        // Create the asset.
-        const asset4 = factory.newResource(namespace, assetType, '4');
-        asset4.owner = factory.newRelationship(namespace, participantType, 'alice@email.com');
-        asset4.value = '40';
-
-        // Try to add the asset, should fail.
-        const assetRegistry = await businessNetworkConnection.getAssetRegistry(assetNS);
-        assetRegistry.add(asset4).should.be.rejectedWith(/does not have .* access to resource/);
-
-    });
-
-    it('Alice can update her assets', async () => {
-        // Use the identity for Alice.
-        await useIdentity(aliceCardName);
-
-        // Create the asset.
-        let asset1 = factory.newResource(namespace, assetType, '1');
-        asset1.owner = factory.newRelationship(namespace, participantType, 'alice@email.com');
-        asset1.value = '50';
-
-        // Update the asset, then get the asset.
-        const assetRegistry = await businessNetworkConnection.getAssetRegistry(assetNS);
-        await assetRegistry.update(asset1);
-
-        // Validate the asset.
-        asset1 = await assetRegistry.get('1');
-        asset1.owner.getFullyQualifiedIdentifier().should.equal(participantNS + '#alice@email.com');
-        asset1.value.should.equal('50');
-    });
-
-    it('Alice cannot update Bob\'s assets', async () => {
-        // Use the identity for Alice.
-        await useIdentity(aliceCardName);
-
-        // Create the asset.
-        const asset2 = factory.newResource(namespace, assetType, '2');
-        asset2.owner = factory.newRelationship(namespace, participantType, 'bob@email.com');
-        asset2.value = '50';
-
-        // Try to update the asset, should fail.
-        const assetRegistry = await businessNetworkConnection.getAssetRegistry(assetNS);
-        assetRegistry.update(asset2).should.be.rejectedWith(/does not have .* access to resource/);
-    });
-
-    it('Bob can update his assets', async () => {
-        // Use the identity for Bob.
-        await useIdentity(bobCardName);
-
-        // Create the asset.
-        let asset2 = factory.newResource(namespace, assetType, '2');
-        asset2.owner = factory.newRelationship(namespace, participantType, 'bob@email.com');
-        asset2.value = '60';
-
-        // Update the asset, then get the asset.
-        const assetRegistry = await businessNetworkConnection.getAssetRegistry(assetNS);
-        await assetRegistry.update(asset2);
-
-        // Validate the asset.
-        asset2 = await assetRegistry.get('2');
-        asset2.owner.getFullyQualifiedIdentifier().should.equal(participantNS + '#bob@email.com');
-        asset2.value.should.equal('60');
-    });
-
-    it('Bob cannot update Alice\'s assets', async () => {
-        // Use the identity for Bob.
-        await useIdentity(bobCardName);
-
-        // Create the asset.
-        const asset1 = factory.newResource(namespace, assetType, '1');
-        asset1.owner = factory.newRelationship(namespace, participantType, 'alice@email.com');
-        asset1.value = '60';
-
-        // Update the asset, then get the asset.
-        const assetRegistry = await businessNetworkConnection.getAssetRegistry(assetNS);
-        assetRegistry.update(asset1).should.be.rejectedWith(/does not have .* access to resource/);
-
-    });
-
-    it('Alice can remove her assets', async () => {
-        // Use the identity for Alice.
-        await useIdentity(aliceCardName);
-
-        // Remove the asset, then test the asset exists.
-        const assetRegistry = await businessNetworkConnection.getAssetRegistry(assetNS);
-        await assetRegistry.remove('1');
-        const exists = await assetRegistry.exists('1');
-        exists.should.be.false;
-    });
-
-    it('Alice cannot remove Bob\'s assets', async () => {
-        // Use the identity for Alice.
-        await useIdentity(aliceCardName);
-
-        // Remove the asset, then test the asset exists.
-        const assetRegistry = await businessNetworkConnection.getAssetRegistry(assetNS);
-        assetRegistry.remove('2').should.be.rejectedWith(/does not have .* access to resource/);
-    });
-
-    it('Bob can remove his assets', async () => {
-        // Use the identity for Bob.
-        await useIdentity(bobCardName);
-
-        // Remove the asset, then test the asset exists.
-        const assetRegistry = await businessNetworkConnection.getAssetRegistry(assetNS);
-        await assetRegistry.remove('2');
-        const exists = await assetRegistry.exists('2');
-        exists.should.be.false;
-    });
-
-    it('Bob cannot remove Alice\'s assets', async () => {
-        // Use the identity for Bob.
-        await useIdentity(bobCardName);
-
-        // Remove the asset, then test the asset exists.
-        const assetRegistry = await businessNetworkConnection.getAssetRegistry(assetNS);
-        assetRegistry.remove('1').should.be.rejectedWith(/does not have .* access to resource/);
-    });
-
-    it('Alice can submit a transaction for her assets', async () => {
-        // Use the identity for Alice.
-        await useIdentity(aliceCardName);
-
-        // Submit the transaction.
-        const transaction = factory.newTransaction(namespace, 'SampleTransaction');
-        transaction.asset = factory.newRelationship(namespace, assetType, '1');
-        transaction.newValue = '50';
-        await businessNetworkConnection.submitTransaction(transaction);
-
-        // Get the asset.
-        const assetRegistry = await businessNetworkConnection.getAssetRegistry(assetNS);
-        const asset1 = await assetRegistry.get('1');
-
-        // Validate the asset.
-        asset1.owner.getFullyQualifiedIdentifier().should.equal(participantNS + '#alice@email.com');
-        asset1.value.should.equal('50');
-
-        // Validate the events.
-        events.should.have.lengthOf(1);
-        const event = events[0];
-        event.eventId.should.be.a('string');
-        event.timestamp.should.be.an.instanceOf(Date);
-        event.asset.getFullyQualifiedIdentifier().should.equal(assetNS + '#1');
-        event.oldValue.should.equal('10');
-        event.newValue.should.equal('50');
-    });
-
-    it('Alice cannot submit a transaction for Bob\'s assets', async () => {
-        // Use the identity for Alice.
-        await useIdentity(aliceCardName);
-
-        // Submit the transaction.
-        const transaction = factory.newTransaction(namespace, 'SampleTransaction');
-        transaction.asset = factory.newRelationship(namespace, assetType, '2');
-        transaction.newValue = '50';
-        businessNetworkConnection.submitTransaction(transaction).should.be.rejectedWith(/does not have .* access to resource/);
-    });
-
-    it('Bob can submit a transaction for his assets', async () => {
-        // Use the identity for Bob.
-        await useIdentity(bobCardName);
-
-        // Submit the transaction.
-        const transaction = factory.newTransaction(namespace, 'SampleTransaction');
-        transaction.asset = factory.newRelationship(namespace, assetType, '2');
-        transaction.newValue = '60';
-        await businessNetworkConnection.submitTransaction(transaction);
-
-        // Get the asset.
-        const assetRegistry = await businessNetworkConnection.getAssetRegistry(assetNS);
-        const asset2 = await assetRegistry.get('2');
-
-        // Validate the asset.
-        asset2.owner.getFullyQualifiedIdentifier().should.equal(participantNS + '#bob@email.com');
-        asset2.value.should.equal('60');
-
-        // Validate the events.
-        events.should.have.lengthOf(1);
-        const event = events[0];
-        event.eventId.should.be.a('string');
-        event.timestamp.should.be.an.instanceOf(Date);
-        event.asset.getFullyQualifiedIdentifier().should.equal(assetNS + '#2');
-        event.oldValue.should.equal('20');
-        event.newValue.should.equal('60');
-    });
-
-    it('Bob cannot submit a transaction for Alice\'s assets', async () => {
-        // Use the identity for Bob.
-        await useIdentity(bobCardName);
-
-        // Submit the transaction.
-        const transaction = factory.newTransaction(namespace, 'SampleTransaction');
-        transaction.asset = factory.newRelationship(namespace, assetType, '1');
-        transaction.newValue = '60';
-        businessNetworkConnection.submitTransaction(transaction).should.be.rejectedWith(/does not have .* access to resource/);
-    });
-
-});
+    return getAssetRegistry(NS + '.Prescription').then(function(registry) {
+        registry.update(request.prescription);
+    })
+}

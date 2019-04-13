@@ -28,7 +28,7 @@ enum ClaimType {
 
 enum PrescriptionClaimStatus {
   o REJECTED // by the provider or doctor
-  o CLAIMED // by the provider
+  o CLAIMED // by the provider or med shop
   o PENDING // default
   o APPROVED // by the doctor
 }
@@ -56,6 +56,7 @@ asset Prescription identified by prescriptionId {
   --> Patient patient
   --> Doctor doctor
   o PrescriptionClaimStatus pstatus
+  o DateTime validUntil optional
 }
 
 /**

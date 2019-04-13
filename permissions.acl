@@ -248,6 +248,14 @@ rule InsuranceProviderCanReadUpdateCreateDoctorDetails {
   action: ALLOW
 }
 
+rule InsuranceProviderCanReadUpdateCreateMedShopDetails {
+  description: "insurance provider can read update and create doctor details"
+  participant: "org.example.ensure.InsuranceProvider"
+  operation: ALL
+  resource: "org.example.ensure.MedicalShop"
+  action: ALLOW
+}
+
 rule InsuranceProviderCanReadBills {
   description: "insurance provider can read bills"
   participant: "org.example.ensure.InsuranceProvider"
