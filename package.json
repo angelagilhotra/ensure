@@ -3,7 +3,7 @@
     "composer": "^0.20.4"
   },
   "name": "ensure",
-  "version": "0.0.72",
+  "version": "0.0.73",
   "description": "health insurance on the blockchain (prototype)",
   "scripts": {
     "prepublish": "mkdirp ./dist && composer archive create --sourceType dir --sourceName . -a ./dist/ensure.bna",
